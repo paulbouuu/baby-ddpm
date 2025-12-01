@@ -19,25 +19,28 @@ def beta_schedule(T, s=0.008):
 
     return alphas, betas, alphas_cumprod
 
-class Diffusion:
+class Diffusion(nn.Module):
     def __init__(self, T=1000):
+        super().__init__()
         self.T = T
-        
+        self.device = "mps" if torch.backends.mps.is_available() else "cuda" if torch.cuda.is_available() else "cpu"
         # noise schedule
         alphas, betas, alphas_cumprod = beta_schedule(T=self.T)
 
-        self.alphas = alphas
-        self.betas = betas
-        self.alphas_cumprod = alphas_cumprod
+        self.register_buffer("alphas", alphas)
+        self.register_buffer("betas", betas)
+        self.register_buffer("alphas_cumprod", alphas_cumprod)
 
-        self.sqrt_alphas_cumprod = torch.sqrt(self.alphas_cumprod)
-        self.sqrt_one_minus_alphas_cumprod = torch.sqrt(1 - self.alphas_cumprod)
+        self.register_buffer("sqrt_alphas_cumprod", torch.sqrt(alphas_cumprod))
+        self.register_buffer("sqrt_one_minus_alphas_cumprod", torch.sqrt(1 - alphas_cumprod))
 
     def q_sample(self, x0, t, noise=None):
         """ diffuse the data at timestep t """
 
         if noise is None:
             noise = torch.randn_like(x0) # (B, C, H, W)
+        
+        t = t.to(self.device)
 
         sqrt_ac = self.sqrt_alphas_cumprod[t].view(-1, 1, 1, 1)
         sqrt_om = self.sqrt_one_minus_alphas_cumprod[t].view(-1, 1, 1, 1)
@@ -46,7 +49,7 @@ class Diffusion:
 
     def training_loss(self, model, x0):
         B, C, H, W = x0.shape
-        t = torch.randint(0, self.T, (B,))
+        t = torch.randint(0, self.T, (B,), device=self.device)
         
         # sample x_t and the added noise
         xt, noise = self.q_sample(x0, t)
@@ -61,6 +64,8 @@ class Diffusion:
     @torch.no_grad()
     def p_sample(self, model, xt, t):
         """ one reverse denoising step: x_t -> x_{t-1} """
+
+        t = t.to(self.device)
 
         beta_t = self.betas[t].view(-1, 1, 1, 1)
         alpha_t = self.alphas[t].view(-1, 1, 1, 1)
@@ -90,6 +95,8 @@ class Diffusion:
     @torch.no_grad()
     def ddim_step(self, model, xt, t, t_prev):
         """ deterministic DDIM update: x_t -> x_{t_prev} """
+        t = t.to(self.device)
+        t_prev = t_prev.to(self.device)
 
         alpha_t = self.alphas_cumprod[t].view(-1, 1, 1, 1)
         alpha_prev = self.alphas_cumprod[t_prev].view(-1, 1, 1, 1)
@@ -111,19 +118,19 @@ class Diffusion:
         B = shape[0]
 
         # start from pure noise
-        xt = torch.randn(shape)
+        xt = torch.randn(shape, device=self.device)
 
         # sequence of timesteps
-        times = torch.linspace(self.T-1, 0, steps, dtype=torch.long)
-
+        times = torch.linspace(self.T-1, 0, steps, dtype=torch.long, device=self.device)
+    
         for i in range(len(times)):
-            t = torch.full((B,), int(times[i]), dtype=torch.long)
+            t = torch.full((B,), int(times[i]), dtype=torch.long, device=self.device)
 
             if i == len(times)-1:
                 # last step predicts x0 directly
                 t_prev = torch.zeros_like(t)
             else:
-                t_prev = torch.full((B,), int(times[i+1]), dtype=torch.long)
+                t_prev = torch.full((B,), int(times[i+1]), dtype=torch.long, device=self.device)
 
             xt = self.ddim_step(model, xt, t, t_prev)
 

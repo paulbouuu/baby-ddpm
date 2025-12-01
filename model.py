@@ -6,10 +6,13 @@ import torch.nn as nn
 
 def sinusoidal_embedding(t, dim):
     """ sinusoidal embedding for time steps t """
+
+    device = t.device
+
     half = dim // 2
 
     freqs = torch.exp(
-        -torch.arange(half, dtype=torch.float32) * (math.log(10000.0) / (half - 1))
+        -torch.arange(half, dtype=torch.float32, device=device) * (math.log(10000.0) / (half - 1))
     )
 
     # outer product (B,1) * (1,half) -> (B, half)
@@ -109,10 +112,11 @@ class SelfAttention(nn.Module):
         return x + out
 
 class UNet(nn.Module):
-    def __init__(self, in_ch=3, out_ch=3, base=64, time_dim=128):
+    def __init__(self, in_ch=3, out_ch=3, base=64, time_dim=128, diffusion_steps=1000):
         super().__init__()
 
         self.time_dim = time_dim
+        self.diffusion_steps = diffusion_steps
         self.time_mlp = TimeEmbedding(time_dim)
 
         # downsample
@@ -152,6 +156,7 @@ class UNet(nn.Module):
         self.final = nn.Conv2d(base, out_ch, 1)
 
     def forward(self, x, t):
+        t = t.to(x.device).float() / self.diffusion_steps
         t_emb = self.time_mlp(t)
 
         # down

@@ -3,7 +3,7 @@ import torch
 
 class EMA:
     """ exponential moving average model """
-    def __init__(self, model, beta=0.995):
+    def __init__(self, model, beta=0.999):
         self.beta = beta
         self.shadow = {k: v.clone().detach() for k, v in model.state_dict().items()}
 
