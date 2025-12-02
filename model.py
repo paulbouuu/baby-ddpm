@@ -139,17 +139,17 @@ class UNet(nn.Module):
             nn.Upsample(scale_factor=2, mode='nearest'),
             nn.Conv2d(base*4, base*4, 3, 1, 1),
         )
-
-        self.up2 = ResBlock(base*4 + base*2, base*2, time_dim)
+        
+        self.up2 = ResBlock(base*4, base*2, time_dim)
         self.upsample2 = nn.Sequential(
             nn.Upsample(scale_factor=2, mode='nearest'),
-            nn.Conv2d(base*4, base*4, 3, 1, 1),
+            nn.Conv2d(base*4, base*2, 3, 1, 1),
         )
 
-        self.up3 = ResBlock(base*2 + base, base, time_dim)
+        self.up3 = ResBlock(base*2, base, time_dim)
         self.upsample3 = nn.Sequential(
             nn.Upsample(scale_factor=2, mode='nearest'),
-            nn.Conv2d(base*2, base*2, 3, 1, 1),
+            nn.Conv2d(base*2, base, 3, 1, 1),
         )
 
         self.final = nn.Conv2d(base, out_ch, 1)
